@@ -1,0 +1,8 @@
+prefix=/home/sk/ws/goat_robotics/devel
+
+Name: teleopbot_v1_description
+Description: Description of teleopbot_v1_description
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

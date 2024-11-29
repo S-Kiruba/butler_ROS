@@ -1,0 +1,2 @@
+navigation:teleopbot_v1_description
+-DCATKIN_DEVEL_PREFIX=/home/sk/ws/goat_robotics/devel -DCMAKE_INSTALL_PREFIX=/home/sk/ws/goat_robotics/install -G Unix Makefiles
