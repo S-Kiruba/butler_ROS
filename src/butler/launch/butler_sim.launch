@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+
+<launch>
+
+  <!-- AMCL -->
+  <include file="$(find teleopbot_v1_description)/launch/gazebo.launch"/>
+
+  <!-- Navigation in rviz -->
+  <include file="$(find navigation)/launch/navigation.launch"/>
+  
+</launch>
