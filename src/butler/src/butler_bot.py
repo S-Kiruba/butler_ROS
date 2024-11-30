@@ -3,7 +3,7 @@ import rospy
 from geometry_msgs.msg import PoseStamped
 from tf.transformations import quaternion_from_euler
 import yaml
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 from move_base_msgs.msg import MoveBaseActionResult
 
 class ButlerRobot():
@@ -11,6 +11,8 @@ class ButlerRobot():
         rospy.init_node("goal_publisher")
         self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
         rospy.Subscriber("/new_order", String, self.order_callback)
+        rospy.Subscriber("/kitchen_confirm", Bool, self.kitchen_confirm_callback)
+        rospy.Subscriber("/table_confirm", Bool, self.table_confirm_callback)
         rospy.Subscriber("/move_base/result", MoveBaseActionResult, self.goal_result_callback)
 
         # Load goals from YAML file
@@ -40,6 +42,29 @@ class ButlerRobot():
         if self.current_task is None:
             self.handle_kitchen_task()
 
+    def kitchen_confirm_callback(self, msg):
+        self.kitchen_confirmation = msg.data
+        rospy.loginfo(f"Kitchen confirmation received: {self.kitchen_confirmation}")
+
+    def table_confirm_callback(self, msg):
+        self.table_confirmation = msg.data
+        rospy.loginfo(f"Table confirmation received: {self.table_confirmation}")
+
+    def wait_for_confirmation(self, location, timeout=30):
+        start_time = rospy.Time.now()
+        rate = rospy.Rate(1)  # 1 Hz
+        
+        while (rospy.Time.now() - start_time).to_sec() < timeout:
+            if location == "kitchen" and self.kitchen_confirmation:
+                self.kitchen_confirmation = False
+                return True
+            elif location.startswith("table") and self.table_confirmation:
+                self.table_confirmation = False
+                return True
+            rate.sleep()
+        
+        return False
+
 
     def goal_result_callback(self, msg):
         self.status = msg.status.status
@@ -48,13 +73,28 @@ class ButlerRobot():
             
             if self.current_task == "kitchen":
                 rospy.loginfo("Reached kitchen.")
-                self.current_task = table
-                self.publish_goal(table)
+                if self.wait_for_confirmation("kitchen"):
+                    rospy.loginfo("Kitchen confirmation received. Proceeding to table.")
+                    if self.task_queue:
+                        table = self.task_queue.pop(0)
+                        self.current_task = table
+                        self.publish_goal(table)
+                else:
+                    rospy.logwarn("No kitchen confirmation received. Returning to home.")
+                    self.current_task = "home"
+                    self.publish_goal("home")
             
             elif self.current_task.startswith("table"):
-                rospy.loginfo(f"Reached {self.current_task}.")
-                self.current_task = home
-                self.publish_goal(home)
+                rospy.loginfo(f"Reached {self.current_task}. Waiting for 30 seconds confirmation...")
+                self.wait_for_confirmation(self.current_task)  # Wait regardless of confirmation
+                rospy.loginfo("Returning to kitchen to check for new orders.")
+                self.current_task = "kitchen"
+                self.publish_goal("kitchen")
+
+            elif self.current_task == "home":
+                self.current_task = None
+                if self.task_queue:
+                    self.handle_kitchen_task()
 
     def publish_goal(self, location):
         if location not in self.goals:
