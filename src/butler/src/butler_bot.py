@@ -11,6 +11,7 @@ class ButlerRobot():
         rospy.init_node("goal_publisher")
         self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
         rospy.Subscriber("/new_order", String, self.order_callback)
+        rospy.Subscriber("/cancel_task", String, self.cancel_callback)
         rospy.Subscriber("/kitchen_confirm", Bool, self.kitchen_confirm_callback)
         rospy.Subscriber("/table_confirm", Bool, self.table_confirm_callback)
         rospy.Subscriber("/move_base/result", MoveBaseActionResult, self.goal_result_callback)
@@ -20,6 +21,8 @@ class ButlerRobot():
         
         self.task_queue = []
         self.current_task = None
+        self.kitchen_confirmation = False
+        self.table_confirmation = False
         self.status = None
         
         # Initialize robot at home
@@ -56,15 +59,14 @@ class ButlerRobot():
         
         while (rospy.Time.now() - start_time).to_sec() < timeout:
             if location == "kitchen" and self.kitchen_confirmation:
-                self.kitchen_confirmation = False
+                self.kitchen_confirmation = False  # Reset for next use
                 return True
             elif location.startswith("table") and self.table_confirmation:
-                self.table_confirmation = False
+                self.table_confirmation = False  # Reset for next use
                 return True
             rate.sleep()
         
-        return False
-
+        return False  # Timeout occurred
 
     def goal_result_callback(self, msg):
         self.status = msg.status.status
@@ -72,13 +74,17 @@ class ButlerRobot():
             rospy.loginfo("Navigation completed successfully.")
             
             if self.current_task == "kitchen":
-                rospy.loginfo("Reached kitchen.")
+                rospy.loginfo("Reached kitchen. Waiting for 30 seconds confirmation...")
                 if self.wait_for_confirmation("kitchen"):
                     rospy.loginfo("Kitchen confirmation received. Proceeding to table.")
                     if self.task_queue:
                         table = self.task_queue.pop(0)
                         self.current_task = table
                         self.publish_goal(table)
+                    else:
+                        rospy.loginfo("No tasks in queue. Returning to home.")
+                        self.current_task = "home"
+                        self.publish_goal("home")
                 else:
                     rospy.logwarn("No kitchen confirmation received. Returning to home.")
                     self.current_task = "home"
@@ -86,15 +92,41 @@ class ButlerRobot():
             
             elif self.current_task.startswith("table"):
                 rospy.loginfo(f"Reached {self.current_task}. Waiting for 30 seconds confirmation...")
-                self.wait_for_confirmation(self.current_task)  # Wait regardless of confirmation
-                rospy.loginfo("Returning to kitchen to check for new orders.")
-                self.current_task = "kitchen"
-                self.publish_goal("kitchen")
-
+                if self.wait_for_confirmation(self.current_task):  # Wait regardless of confirmation
+                    rospy.loginfo("Returning to kitchen to check for new orders.")
+                    if self.task_queue:
+                        table = self.task_queue.pop(0)
+                        self.current_task = table
+                        self.publish_goal(table)
+                    else:
+                        rospy.loginfo("No tasks in queue. Returning to home.")
+                        self.current_task = "kitchen"
+                        self.publish_goal("kitchen")
+                else:
+                    rospy.logwarn("No table confirmation received.")
+                    if self.task_queue:
+                        table = self.task_queue.pop(0)
+                        self.current_task = table
+                        self.publish_goal(table)
+                    else:
+                        rospy.loginfo("No tasks in queue. Returning to kitchen.")
+                        self.current_task = "kitchen"
+                        self.publish_goal("kitchen")
+            
             elif self.current_task == "home":
                 self.current_task = None
                 if self.task_queue:
                     self.handle_kitchen_task()
+
+    def cancel_callback(self, msg):
+        cancel_order = msg.data.strip()
+        if self.current_task == cancel_order:
+            rospy.logwarn(f"Current task {cancel_order} canceled!")
+            self.current_task = None
+            self.publish_goal("home")
+        elif cancel_order in self.task_queue:
+            self.task_queue.remove(cancel_order)
+            rospy.loginfo(f"Task {cancel_order} removed from the queue.")
 
     def publish_goal(self, location):
         if location not in self.goals:
@@ -120,5 +152,13 @@ class ButlerRobot():
             self.current_task = "kitchen"
             self.publish_goal("kitchen")
 
+    def execute_tasks(self):
+        rate = rospy.Rate(1)  # 1 Hz
+        while not rospy.is_shutdown():
+            if self.current_task is None and self.task_queue:
+                self.handle_kitchen_task()
+            rate.sleep()
+
 if __name__ == "__main__":
     robot = ButlerRobot()
+    robot.execute_tasks()
