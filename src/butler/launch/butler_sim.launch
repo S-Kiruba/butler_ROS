@@ -2,7 +2,7 @@
 
 <launch>
 
-  <!-- AMCL -->
+  <!-- Gazebo_environment -->
   <include file="$(find teleopbot_v1_description)/launch/gazebo.launch"/>
 
   <!-- Navigation in rviz -->
