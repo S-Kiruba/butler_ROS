@@ -1,43 +1,84 @@
 #!/usr/bin/env python3
-
 import rospy
 from geometry_msgs.msg import PoseStamped
+from tf.transformations import quaternion_from_euler
+import yaml
+from std_msgs.msg import String
+from move_base_msgs.msg import MoveBaseActionResult
 
-def publish_goal_pose():
+class ButlerRobot():
+    def __init__(self):
+        rospy.init_node("goal_publisher")
+        self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
+        rospy.Subscriber("/new_order", String, self.order_callback)
+        rospy.Subscriber("/move_base/result", MoveBaseActionResult, self.goal_result_callback)
 
-    rospy.init_node('goal_pose_publisher', anonymous=True)
+        # Load goals from YAML file
+        self.goals = self.load_goals("/home/sk/ws/goat_robotics/src/butler/src/goals.yaml")
+        
+        self.task_queue = []
+        self.current_task = None
+        self.status = None
+        
+        # Initialize robot at home
+        self.publish_goal("home")
 
-    goal_pose_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
+    def load_goals(self, file_path):
+        try:
+            with open(file_path, "r") as file:
+                data = yaml.safe_load(file)
+            rospy.loginfo("Goals loaded successfully.")
+            return data["goals"]
+        except Exception as e:
+            rospy.logerr(f"Failed to load goals: {e}")
+            return {}
 
-    rospy.sleep(1)
-
-    goal_pose = PoseStamped()
-
-    goal_pose.header.stamp = rospy.Time.now()
-    goal_pose.header.frame_id = "map"
-
-    # Define the goal position (x, y, z) in meters
-    goal_pose.pose.position.x = 2.0  # Change to the desired x-coordinate
-    goal_pose.pose.position.y = 3.0  # Change to the desired y-coordinate
-    goal_pose.pose.position.z = 0.0  # Typically 0 in a 2D plane
+    def order_callback(self, msg):
+        new_orders = msg.data.split()
+        self.task_queue.extend(new_orders)
+        rospy.loginfo(f"New orders received: {new_orders}")
+        if self.current_task is None:
+            self.handle_kitchen_task()
 
 
-    from tf.transformations import quaternion_from_euler
-    yaw = 1.57
-    quaternion = quaternion_from_euler(0, 0, yaw)
-    goal_pose.pose.orientation.x = quaternion[0]
-    goal_pose.pose.orientation.y = quaternion[1]
-    goal_pose.pose.orientation.z = quaternion[2]
-    goal_pose.pose.orientation.w = quaternion[3]
+    def goal_result_callback(self, msg):
+        self.status = msg.status.status
+        if self.status == 3:  # Goal reached successfully
+            rospy.loginfo("Navigation completed successfully.")
+            
+            if self.current_task == "kitchen":
+                rospy.loginfo("Reached kitchen.")
+                self.current_task = table
+                self.publish_goal(table)
+            
+            elif self.current_task.startswith("table"):
+                rospy.loginfo(f"Reached {self.current_task}.")
+                self.current_task = home
+                self.publish_goal(home)
 
-    rospy.loginfo("Publishing goal pose...")
-    goal_pose_pub.publish(goal_pose)
+    def publish_goal(self, location):
+        if location not in self.goals:
+            rospy.logerr(f"Unknown location: {location}")
+            return False
+        
+        goal = PoseStamped()
+        goal.header.frame_id = "map"
+        goal.header.stamp = rospy.Time.now()
+        goal.pose.position.x = self.goals[location]["x"]
+        goal.pose.position.y = self.goals[location]["y"]
+        quaternion = quaternion_from_euler(0, 0, self.goals[location]["yaw"])
+        goal.pose.orientation.z = quaternion[2]
+        goal.pose.orientation.w = quaternion[3]
 
-    rospy.loginfo("Goal pose published successfully!")
-    rospy.spin()
+        self.goal_pub.publish(goal)
+        rospy.loginfo(f"Goal published to {location}")
+        return True
 
-if __name__ == '__main__':
-    try:
-        publish_goal_pose()
-    except rospy.ROSInterruptException:
-        pass
+    def handle_kitchen_task(self):
+        if not self.current_task:
+            rospy.loginfo("Navigating to kitchen for order pickup.")
+            self.current_task = "kitchen"
+            self.publish_goal("kitchen")
+
+if __name__ == "__main__":
+    robot = ButlerRobot()
