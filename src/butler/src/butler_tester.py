@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+
+import rospy
+from std_msgs.msg import String, Bool
+import sys
+import termios
+import tty
+import threading
+
 class ButlerTester:
     def __init__(self):
         rospy.init_node("butler_tester", anonymous=True)

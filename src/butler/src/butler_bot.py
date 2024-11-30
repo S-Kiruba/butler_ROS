@@ -122,8 +122,15 @@ class ButlerRobot():
         cancel_order = msg.data.strip()
         if self.current_task == cancel_order:
             rospy.logwarn(f"Current task {cancel_order} canceled!")
-            self.current_task = None
-            self.publish_goal("home")
+            if self.task_queue:
+                table = self.task_queue.pop(0)
+                self.current_task = table
+                self.publish_goal(table)
+            else:
+                rospy.loginfo("No tasks in queue. Returning to kitchen.")
+                self.current_task = "kitchen"
+                self.publish_goal("kitchen")
+
         elif cancel_order in self.task_queue:
             self.task_queue.remove(cancel_order)
             rospy.loginfo(f"Task {cancel_order} removed from the queue.")
