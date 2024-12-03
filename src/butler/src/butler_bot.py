@@ -117,6 +117,8 @@ class ButlerRobot():
                 self.current_task = None
                 if self.task_queue:
                     self.handle_kitchen_task()
+                else:
+                    return # no confirmation from the kitchen and no queue 
 
     def cancel_callback(self, msg):
         cancel_order = msg.data.strip()
