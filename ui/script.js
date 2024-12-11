@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let totalTables = 4; // Initial table count
     let tableConfirmations = {}; // Confirmation data for tables
+    let kitchenConfirmations = {}; // Kitchen readiness for each table
     let taskQueue = []; // Task queue for orders
 
     // Function to dynamically generate table options for dropdowns
@@ -72,6 +73,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('username').value = '';
         document.getElementById('password').value = '';
         currentUserType = '';
+
+        // Clear table confirmations, task queue, and kitchen readiness on logout
+        tableConfirmations = {};
+        kitchenConfirmations = {};
+        taskQueue = [];
+        updateTableConfirmationDisplay(); // Reset confirmation UI
+        updateTaskQueue(); // Reset task queue UI
+        updateKitchenConfirmationDisplay(); // Reset kitchen readiness UI
     });
 
     // Vendor: Place order
@@ -139,6 +148,14 @@ document.addEventListener('DOMContentLoaded', () => {
             tableConfirmations[tableNumber] = true; // Set confirmation to true
             alert(`Table ${tableNumber} confirmed by vendor.`);
 
+            // Remove the table from the task queue if it exists
+            const orderToRemove = `Table${tableNumber}`;
+            const index = taskQueue.indexOf(orderToRemove);
+            if (index !== -1) {
+                taskQueue.splice(index, 1); // Remove the confirmed table from the queue
+                updateTaskQueue(); // Update the displayed task queue
+            }
+
             // Send confirmation to backend
             fetch('http://localhost:5000/table_confirm', {
                 method: 'POST',
@@ -154,7 +171,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Reset confirmation to false after 2 seconds
             setTimeout(() => {
                 tableConfirmations[tableNumber] = false;
-                updateTableConfirmationDisplay();
+                kitchenConfirmations[tableNumber] = false; // Reset kitchen readiness as well
+                updateTableConfirmationDisplay(); // Update UI after resetting the confirmation
             }, 2000);
 
             updateTableConfirmationDisplay();
@@ -163,10 +181,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Vendor: Confirm kitchen readiness (Push button configuration)
+    // Vendor: Confirm kitchen readiness for specific table (Push button configuration)
     document.getElementById('confirm_kitchen_button').addEventListener('click', () => {
         const tableNumber = tableSelectVendor.value;
         if (tableNumber) {
+            kitchenConfirmations[tableNumber] = true; // Set kitchen readiness for the table
             alert(`Kitchen readiness confirmed for Table ${tableNumber}.`);
 
             // Send kitchen confirmation to backend
@@ -175,44 +194,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(true),
-            })
-            .then(response => response.json())
-            .then(data => console.log(data))
-            .catch(error => console.error('Error:', error));
-        } else {
-            alert("Please select a table to confirm.");
-        }
-    });
-
-    // Customer: Confirm table seating (Push button configuration)
-    document.getElementById('confirm_table_customer_button').addEventListener('click', () => {
-        const tableNumber = tableSelectCustomer.value;
-        if (tableNumber) {
-            tableConfirmations[tableNumber] = true; // Set confirmation to true
-            alert(`Table ${tableNumber} confirmed by customer.`);
-
-            // Send confirmation to backend
-            fetch('http://localhost:5000/table_confirm', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(true),
+                body: JSON.stringify({ table: tableNumber, ready: true }),
             })
             .then(response => response.json())
             .then(data => console.log(data))
             .catch(error => console.error('Error:', error));
 
-            // Reset confirmation to false after 2 seconds
+            // Reset kitchen readiness after 2 seconds
             setTimeout(() => {
-                tableConfirmations[tableNumber] = false;
-                updateTableConfirmationDisplay();
+                kitchenConfirmations[tableNumber] = false;
+                updateKitchenConfirmationDisplay(); // Update UI after resetting kitchen readiness
             }, 2000);
 
-            updateTableConfirmationDisplay();
+            updateKitchenConfirmationDisplay();
         } else {
-            alert("Please select a table to confirm.");
+            alert("Please select a table to confirm kitchen readiness.");
         }
     });
 
@@ -238,34 +234,59 @@ document.addEventListener('DOMContentLoaded', () => {
     // Helper function to update the task queue display
     function updateTaskQueue() {
         const taskQueueDiv = document.getElementById('task_queue');
-        taskQueueDiv.innerHTML = '';
+        taskQueueDiv.innerHTML = ''; // Clear existing tasks
+
+        if (taskQueue.length === 0) {
+            taskQueueDiv.innerHTML = "No tasks in the queue."; // Message when queue is empty
+        }
+
         taskQueue.forEach(task => {
             const taskItem = document.createElement('div');
             taskItem.textContent = task;
+            taskItem.classList.add('task-item');
             taskQueueDiv.appendChild(taskItem);
         });
     }
 
-    // Helper function to update the table confirmation display
-    function updateTableConfirmationDisplay() {
-        const vendorConfirmationDiv = document.getElementById('vendor_table_confirmations');
-        const customerConfirmationDiv = document.getElementById('table_confirmation_customer');
+// Helper function to update the table confirmation display (vendor and customer)
+function updateTableConfirmationDisplay() {
+    const vendorConfirmationDiv = document.getElementById('vendor_table_confirmations');
+    const customerConfirmationDiv = document.getElementById('table_confirmation_customer');
 
-        // Update vendor confirmations
-        vendorConfirmationDiv.innerHTML = '';
-        for (let table in tableConfirmations) {
-            const confirmationItem = document.createElement('div');
-            confirmationItem.textContent = `Table ${table}: ${tableConfirmations[table] ? 'Confirmed' : 'Not Confirmed'}`;
-            vendorConfirmationDiv.appendChild(confirmationItem);
-        }
+    // Clear the current confirmations
+    vendorConfirmationDiv.innerHTML = '';
+    customerConfirmationDiv.innerHTML = '';
 
-        // Update customer confirmations
-        customerConfirmationDiv.innerHTML = '';
-        for (let table in tableConfirmations) {
-            const confirmationItem = document.createElement('div');
-            confirmationItem.textContent = `Table ${table}: ${tableConfirmations[table] ? 'Confirmed' : 'Not Confirmed'}`;
-            customerConfirmationDiv.appendChild(confirmationItem);
+    // Update vendor table confirmations
+    for (let table in tableConfirmations) {
+        const confirmationItem = document.createElement('div');
+        confirmationItem.textContent = `Table ${table}: ${tableConfirmations[table] ? 'Confirmed' : 'Not Confirmed'}`;
+        confirmationItem.style.color = tableConfirmations[table] ? 'green' : 'red'; // Green for confirmed, red for not confirmed
+        vendorConfirmationDiv.appendChild(confirmationItem);
+    }
+
+    // Update customer table confirmations
+    for (let table in tableConfirmations) {
+        const confirmationItem = document.createElement('div');
+        confirmationItem.textContent = `Table ${table}: ${tableConfirmations[table] ? 'Confirmed' : 'Not Confirmed'}`;
+        confirmationItem.style.color = tableConfirmations[table] ? 'green' : 'red'; // Green for confirmed, red for not confirmed
+        customerConfirmationDiv.appendChild(confirmationItem);
+    }
+}
+
+    // Helper function to update the kitchen readiness display
+    function updateKitchenConfirmationDisplay() {
+        const kitchenConfirmationDiv = document.getElementById('kitchen_confirmation');
+        kitchenConfirmationDiv.innerHTML = '';
+        for (let table in kitchenConfirmations) {
+            const status = kitchenConfirmations[table] ? 'Kitchen Ready' : 'Kitchen Not Ready';
+            const color = kitchenConfirmations[table] ? 'green' : 'red';
+
+            const kitchenConfirmationItem = document.createElement('div');
+            kitchenConfirmationItem.textContent = `Table ${table}: ${status}`;
+            kitchenConfirmationItem.style.color = color;
+            kitchenConfirmationDiv.appendChild(kitchenConfirmationItem);
         }
     }
-});
 
+});
