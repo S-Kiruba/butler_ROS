@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Management System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="login_section">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Username" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <button id="login_button" class="btn">Login</button>
+    </div>
+
+    <div id="dashboard_section" style="display: none;">
+        <!-- Vendor Dashboard -->
+        <div id="vendor_dashboard" style="display: none;">
+            <h2>Vendor Dashboard</h2>
+            <div>
+                <h3>Manage Tables</h3>
+                <select id="table_select_vendor"></select>
+                <button id="add_table_button" class="btn">Add Table</button>
+                <button id="remove_table_button" class="btn">Remove Table</button>
+                <button id="place_order_button" class="btn">Place Order</button>
+                <button id="cancel_order_button" class="btn">Cancel Order</button>
+                <button id="confirm_kitchen_button" class="btn">Confirm Kitchen</button>
+                <button id="confirm_table_vendor_button" class="btn">Confirm Table</button>
+            </div>
+            <div id="vendor_table_confirmations">
+                <!-- Confirmations will dynamically populate here -->
+            </div>
+        </div>
+
+        <!-- Customer Dashboard -->
+        <div id="customer_dashboard" style="display: none;">
+            <h2>Customer Dashboard</h2>
+            <div>
+                <h3>Place Order</h3>
+                <select id="table_select_customer"></select>
+                <button id="place_order_button_customer" class="btn">Place Order</button>
+                <button id="cancel_order_button_customer" class="btn">Cancel Order</button>
+                <button id="confirm_table_customer_button" class="btn">Confirm Table</button>
+                <div id="table_confirmation_customer"></div>
+            </div>
+            <div id="customer_waiting_list">
+                <h3>Customer Task Queue</h3>
+            </div>
+        </div>
+
+        <!-- Task Queue -->
+        <div id="task_queue">
+            <h3>Vendor Task Queue</h3>
+        </div>
+
+        <button id="logout_button" class="btn">Logout</button>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
